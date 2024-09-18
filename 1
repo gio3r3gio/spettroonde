@@ -1,0 +1,166 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import customtkinter as ctk
+import random
+
+# Funzione per convertire la lunghezza d'onda in un colore RGB
+def wavelength_to_rgb(wavelength):
+    if 380 <= wavelength < 440:
+        R, G, B = -(wavelength - 440) / (440 - 380), 0.0, 1.0
+    elif 440 <= wavelength < 490:
+        R, G, B = 0.0, (wavelength - 440) / (490 - 440), 1.0
+    elif 490 <= wavelength < 510:
+        R, G, B = 0.0, 1.0, -(wavelength - 510) / (510 - 490)
+    elif 510 <= wavelength < 580:
+        R, G, B = (wavelength - 510) / (580 - 510), 1.0, 0.0
+    elif 580 <= wavelength < 645:
+        R, G, B = 1.0, -(wavelength - 645) / (645 - 580), 0.0
+    elif 645 <= wavelength <= 780:
+        R, G, B = 1.0, 0.0, 0.0
+    else:
+        R, G, B = 0.0, 0.0, 0.0
+
+    factor = 0.3 + 0.7 * (1 if 420 <= wavelength < 645 else
+                          (wavelength - 380) / (420 - 380) if 380 <= wavelength < 420 else
+                          (780 - wavelength) / (780 - 645))
+    
+    return tuple(int(x * factor * 255) / 255 for x in (R, G, B))
+
+# Classe principale del gioco
+class WavelengthGame(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("Indovina la lunghezza d'onda")
+        self.geometry("1200x800")  # Dimensione della finestra
+
+        # Layout principale
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        self.frame = ctk.CTkFrame(self)
+        self.frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+
+        # Creazione delle figure per i rettangoli dei colori
+        self.figure_rect, (self.ax_target_rect, self.ax_guess_rect) = plt.subplots(1, 2, figsize=(8, 2.5))
+        self.canvas_rect = FigureCanvasTkAgg(self.figure_rect, master=self.frame)
+        self.canvas_widget_rect = self.canvas_rect.get_tk_widget()
+        self.canvas_widget_rect.pack(pady=10)
+
+        # Creazione delle figure per i grafici delle onde
+        self.figure_wave, (self.ax_target_wave, self.ax_guess_wave) = plt.subplots(2, 1, figsize=(8, 3.5))
+        self.canvas_wave = FigureCanvasTkAgg(self.figure_wave, master=self.frame)
+        self.canvas_widget_wave = self.canvas_wave.get_tk_widget()
+        self.canvas_widget_wave.pack(pady=10)
+
+        # Etichetta di istruzione
+        self.label = ctk.CTkLabel(self.frame, text="Indovina la lunghezza d'onda (380 - 780 nm):", font=("Helvetica", 16))
+        self.label.pack(pady=5)
+
+        # Casella di input
+        self.entry = ctk.CTkEntry(self.frame, width=180, font=("Helvetica", 14))
+        self.entry.pack(pady=5)
+
+        # Bottone per indovinare
+        self.button = ctk.CTkButton(self.frame, text="Indovina", command=self.check_guess, font=("Helvetica", 14))
+        self.button.pack(pady=5)
+
+        # Etichette per il risultato e la precisione
+        self.result_label = ctk.CTkLabel(self.frame, text="", font=("Helvetica", 14))
+        self.result_label.pack(pady=5)
+
+        self.accuracy_label = ctk.CTkLabel(self.frame, text="Precisione: -", font=("Helvetica", 16))
+        self.accuracy_label.pack(pady=5)
+
+        # Bottone per nuova partita
+        self.next_button = ctk.CTkButton(self.frame, text="Nuova partita", command=self.new_game, font=("Helvetica", 14))
+        self.next_button.pack(pady=5)
+
+        # Inizializzazione del gioco
+        self.current_wavelength = None
+        self.new_game()
+
+    # Funzione per avviare una nuova partita
+    def new_game(self):
+        self.current_wavelength = random.randint(380, 780)
+        color = wavelength_to_rgb(self.current_wavelength)
+
+        # Aggiornamento dei rettangoli dei colori
+        self.ax_target_rect.clear()
+        self.ax_target_rect.set_facecolor(color)
+        self.ax_target_rect.set_title("Colore da indovinare")
+        self.ax_target_rect.set_xticks([])
+        self.ax_target_rect.set_yticks([])
+
+        self.ax_guess_rect.clear()
+        self.ax_guess_rect.set_facecolor('white')
+        self.ax_guess_rect.set_title("La tua ipotesi")
+        self.ax_guess_rect.set_xticks([])
+        self.ax_guess_rect.set_yticks([])
+
+        self.plot_wave(self.ax_target_wave, self.current_wavelength, "Onda corretta")
+        
+        # Azzeramento dell'onda ipotizzata
+        self.ax_guess_wave.clear()
+        self.ax_guess_wave.set_title("Onda ipotizzata")
+        self.ax_guess_wave.set_xticks([])
+        self.ax_guess_wave.set_yticks([])
+
+        # Reset della grafica e dei campi
+        self.canvas_rect.draw()
+        self.canvas_wave.draw()
+        self.entry.delete(0, 'end')
+        self.result_label.configure(text="")
+        self.accuracy_label.configure(text="Precisione: -")
+
+    # Funzione per verificare l'ipotesi dell'utente
+    def check_guess(self):
+        try:
+            guess = float(self.entry.get())
+            if 380 <= guess <= 780:
+                difference = abs(guess - self.current_wavelength)
+                accuracy = max(0, 100 - (difference / 4))  # 100% per corrispondenza perfetta
+                result_text = f"Lunghezza d'onda corretta: {self.current_wavelength} nm\nLa tua ipotesi: {guess:.2f} nm"
+                self.result_label.configure(text=result_text)
+                self.accuracy_label.configure(text=f"Precisione: {accuracy:.2f}%")
+                self.plot_guess(guess)
+            else:
+                self.result_label.configure(text="Inserisci un valore tra 380 nm e 780 nm.")
+        except ValueError:
+            self.result_label.configure(text="Inserisci un numero valido.")
+
+    # Funzione per tracciare la forma d'onda dell'indovinello
+    def plot_guess(self, guess):
+        color = wavelength_to_rgb(guess)
+
+        # Aggiornamento del rettangolo del colore ipotizzato
+        self.ax_guess_rect.clear()
+        self.ax_guess_rect.set_facecolor(color)
+        self.ax_guess_rect.set_title("Il tuo indovinello")
+
+        # Aggiornamento del grafico dell'onda ipotizzata
+        self.plot_wave(self.ax_guess_wave, guess, "Onda ipotizzata")
+
+        # Aggiornamento delle figure
+        self.canvas_rect.draw()
+        self.canvas_wave.draw()
+
+    # Funzione per tracciare la forma d'onda basata sulla lunghezza d'onda
+    def plot_wave(self, ax, wavelength, title):
+        x = np.linspace(0, 4 * np.pi, 1000)
+        y = np.sin(x * (780 / wavelength))
+        color = wavelength_to_rgb(wavelength)
+        ax.clear()
+        ax.plot(x, y, color=color)
+        ax.set_title(title)
+        ax.set_ylabel("Ampiezza", fontsize=12)  # Mantenere l'etichetta dell'asse Y
+        ax.set_xticks([])  # Mantenere gli assi X vuoti
+        ax.set_yticks([])  # Mantenere gli assi Y vuoti
+
+# Esecuzione dell'applicazione
+if __name__ == "__main__":
+    ctk.set_appearance_mode("dark")  # Imposta il tema scuro per un aspetto moderno
+    ctk.set_default_color_theme("blue")  # Imposta il tema di colore blu
+    app = WavelengthGame()
+    app.mainloop()
